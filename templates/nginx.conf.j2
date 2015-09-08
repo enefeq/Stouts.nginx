@@ -5,14 +5,21 @@ user  {{nginx_user}};
 worker_processes  {{nginx_worker_processes}};
 
 events {
-    multi_accept  {{'on' if nginx_multi_accept else 'off'}};
     worker_connections  {{nginx_worker_connections}};
+    use epoll;
+    multi_accept  {{'on' if nginx_multi_accept else 'off'}};
+    accept_mutex  {{'on' if nginx_accept_mutex else 'off'}};
 }
 
 
 http {
     include       mime.types;
     default_type  application/octet-stream;
+
+    log_format  main  '$remote_addr $http_host "$upstream_addr" $msec $request_time "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for" '
+                      '"$cookie_sourceid $cookie_mId" "$cookie_pageTimeTracker"';
 
     sendfile {{'on' if nginx_sendfile else 'off'}};
 
@@ -31,13 +38,19 @@ http {
 
 {% if nginx_gzip %}
     gzip on;
-    gzip_disable "msie6";
+    gzip_min_length 600;
+    gzip_comp_level 6;
+    gzip_http_version 1.1;
     gzip_types text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript application/javascript;
+    gzip_disable "MSIE [1-6]\.(?!.*SV1)";
+    gzip_proxied any;
+    gzip_vary on;
 {% endif %}
 
+    server_names_hash_max_size {{nginx_server_names_hash_max_size}};
     server_names_hash_bucket_size {{nginx_server_names_hash_bucket_size}};
 
-    access_log {{nginx_access_log}};
+    access_log {{nginx_access_log}} main;
     error_log {{nginx_error_log}};
 
 {% if nginx_http_options %}{% for option in nginx_http_options %}
